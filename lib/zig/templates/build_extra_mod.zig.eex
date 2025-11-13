@@ -15,7 +15,12 @@ const <%= @name %> = b.createModule(
         .link_libcpp = true,
         <% end %>
         <%= if @root? do %>
-        .target = resolved_target,
+        // Use target_for_modules which is set differently for nif_lib vs sema modes:
+        // - nif_lib: uses resolved_target (cross-compile target, e.g., ARM64)
+        // - sema: uses host_target (build machine, e.g., x86_64) so it can execute
+        // Note: This means sema may analyze types with host assumptions rather than
+        // target-specific sizes/layouts, but this is typically acceptable.
+        .target = target_for_modules,
         .optimize = optimize,
         .error_tracing = error_tracing,
         <% end %>

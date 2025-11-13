@@ -5,6 +5,8 @@ const BuildMode = enum{ nif_lib, sema };
 
 pub fn build(b: *std.Build) void {
     const resolved_target = b.standardTargetOptions(<%=Zig.Target.for_builder()%>);
+    // Get host target for build tools that must execute during compilation
+    const host_target = b.graph.host;
     const optimize: std.builtin.OptimizeMode = <%= render_optimize_mode(assigns) %>;
     const error_tracing = <%= @error_tracing %>;
 
@@ -19,6 +21,8 @@ pub fn build(b: *std.Build) void {
 
     switch (mode) {
         .nif_lib => {
+            // NIF library builds for the target platform (e.g., ARM64 for Raspberry Pi)
+            const target_for_modules = resolved_target;
 
             <%= Builder.render_build(BuildModule.erl_nif()) %>
             <%= Builder.render_build(BuildModule.beam()) %>
@@ -56,6 +60,9 @@ pub fn build(b: *std.Build) void {
             b.installArtifact(lib);
         },
         .sema => {
+            // Sema analyzer must run on the build machine during compilation
+            const target_for_modules = host_target;
+
             <%= Builder.render_build(BuildModule.stub_erl_nif()) %>
             <%= Builder.render_build(BuildModule.beam()) %>
             <%= Builder.render_build(BuildModule.attributes()) %>
@@ -68,8 +75,13 @@ pub fn build(b: *std.Build) void {
                 .root_module = sema
             });
 
-            <%= render_c(@c, :sema_exe) %>
-            <%= for extra_module <- @extra_modules, do: render_c(extra_module, :sema_exe) %>
+            // Skip library linking for sema - it only needs headers for type analysis
+            // via @cImport. Linking would fail in cross-compile scenarios where target
+            // libraries (e.g., ARM64 libethercat.so) are incompatible with the host
+            // sema executable (x86_64). Include paths are inherited from modules.
+            //
+            // <%= render_c(@c, :sema_exe) %>
+            // <%= for extra_module <- @extra_modules, do: render_c(extra_module, :sema_exe) %>
 
             b.installArtifact(sema_exe);
 
